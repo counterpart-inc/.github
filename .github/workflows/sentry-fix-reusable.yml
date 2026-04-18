@@ -1,0 +1,68 @@
+name: Sentry Fix (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      sentry_issue_url:
+        description: "Full Sentry issue URL"
+        required: true
+        type: string
+      repo_name:
+        description: "Calling repo name (for Slack notification context)"
+        required: false
+        type: string
+        default: ${{ github.repository }}
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+      SENTRY_AUTH_TOKEN:
+        required: true
+      LINEAR_API_KEY:
+        required: true
+      SLACK_BOT_TOKEN:
+        required: true
+      GH_TOKEN:
+        required: false
+
+jobs:
+  sentry-fix:
+    name: Investigate and fix Sentry issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN || github.token }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "claude-bot@yourcounterpart.com"
+          git config --global user.name "Claude"
+
+      - name: Install cmpd plugin
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude /install-marketplace https://raw.githubusercontent.com/counterpart-inc/counterpart-plugins/main/.claude-plugin/marketplace.json
+          claude /install-plugin cmpd
+
+      - name: Run sentry-fix
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+        run: |
+          claude --print "/sentry-fix ${{ inputs.sentry_issue_url }} --autonomous"
