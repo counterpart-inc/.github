@@ -1,0 +1,91 @@
+name: Sentry Fix (Reusable)
+
+# Slack channel configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# This workflow sends a notification to a Slack channel when a fix is ready
+# for review. The channel is resolved from the SLACK_TRIAGE_CHANNEL Actions
+# variable using GitHub's built-in variable inheritance:
+#
+#   1. Repo-level  → Settings › Secrets and variables › Actions › Variables
+#                    Set this for repos with a dedicated triage channel.
+#                    e.g. counterpart-inc/counterpart: #counterpart-triage
+#                         counterpart-inc/glacier:     #aspen-triage
+#
+#   2. Org-level   → counterpart-inc org Settings › Secrets and variables
+#                    Acts as the catch-all for repos that haven't set their own.
+#                    e.g. #engineering-triage
+#
+# GitHub resolves repo-level first; org-level is the automatic fallback.
+# No code change is needed to route a repo to a different channel — just
+# set or update the SLACK_TRIAGE_CHANNEL variable in that repo's settings.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_call:
+    inputs:
+      sentry_issue_url:
+        description: "Full Sentry issue URL"
+        required: true
+        type: string
+      repo_name:
+        description: "Calling repo name (for Slack notification context)"
+        required: false
+        type: string
+        default: ${{ github.repository }}
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+      SENTRY_AUTH_TOKEN:
+        required: true
+      LINEAR_API_KEY:
+        required: true
+      SLACK_BOT_TOKEN:
+        required: true
+      GH_TOKEN:
+        required: false
+
+jobs:
+  sentry-fix:
+    name: Investigate and fix Sentry issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN || github.token }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "claude-bot@yourcounterpart.com"
+          git config --global user.name "Claude"
+
+      - name: Install cmpd plugin
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude /install-marketplace https://raw.githubusercontent.com/counterpart-inc/counterpart-plugins/main/.claude-plugin/marketplace.json
+          claude /install-plugin cmpd
+
+      - name: Run sentry-fix
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+          # Resolved automatically: repo-level variable wins, org-level is the fallback.
+          # See channel configuration docs at the top of this file.
+          SLACK_TRIAGE_CHANNEL: ${{ vars.SLACK_TRIAGE_CHANNEL }}
+        run: |
+          claude --print "/sentry-fix ${{ inputs.sentry_issue_url }} --autonomous"
