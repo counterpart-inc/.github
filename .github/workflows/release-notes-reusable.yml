@@ -1,0 +1,36 @@
+name: Release Notes (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      release_url:
+        description: "GitHub release URL"
+        required: true
+        type: string
+      slack_channel:
+        description: "Slack channel to post to"
+        required: false
+        type: string
+        default: "#engineering-releases"
+    secrets:
+      LINEAR_API_KEY:
+        required: true
+      CLAUDE_LINEAR_AI_RELEASE_NOTES_API_KEY:
+        required: true
+      SLACK_AI_RELEASE_NOTES_TOKEN:
+        required: false
+
+jobs:
+  generate:
+    name: Generate release notes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Release Notes
+        uses: counterpart-inc/linear-ai-release-notes@main
+        with:
+          release_url: ${{ inputs.release_url }}
+          linear_api_key: ${{ secrets.LINEAR_API_KEY }}
+          github_token: ${{ github.token }}
+          claude_linear_ai_release_notes_api_key: ${{ secrets.CLAUDE_LINEAR_AI_RELEASE_NOTES_API_KEY }}
+          slack_token: ${{ secrets.SLACK_AI_RELEASE_NOTES_TOKEN }}
+          slack_channel: ${{ inputs.slack_channel }}
