@@ -1,0 +1,6 @@
+{
+  "name": "Validate PR Template",
+  "description": "Fails CI if the PR description has unfilled placeholders, empty testing steps, or missing QA evidence.",
+  "iconName": "octicon-checklist",
+  "categories": ["automation"]
+}

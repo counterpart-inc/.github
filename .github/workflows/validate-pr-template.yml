@@ -1,0 +1,60 @@
+name: Validate PR Template (Reusable)
+
+on:
+  workflow_call:
+    # Caller should trigger on pull_request: [review_requested]
+
+jobs:
+  validate:
+    name: Validate PR description
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR template completeness
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request?.body ?? '';
+            const failures = [];
+
+            // Linear ticket placeholder not replaced
+            if (body.includes('ENG-XXX')) {
+              failures.push('Linear ticket placeholder not replaced — update `ENG-XXX` with the actual ticket ID');
+            }
+
+            // No Type of Change selected
+            const typeMatch = body.match(/\*\*Type of Change\*\*([\s\S]*?)(?=---|$)/);
+            if (typeMatch && !typeMatch[1].includes('[x]')) {
+              failures.push('No Type of Change selected — check at least one option in the **Type of Change** block');
+            }
+
+            // Manual Testing Steps left empty
+            const stepsMatch = body.match(/#### Manual Testing Steps([\s\S]*?)(?=####|$)/);
+            if (stepsMatch && /^\d+\.\s*$/m.test(stepsMatch[1])) {
+              failures.push('Manual Testing Steps are empty — replace the numbered placeholders with actual instructions');
+            }
+
+            // No QA Evidence checked
+            const qaMatch = body.match(/#### QA Evidence([\s\S]*?)(?=###|$)/);
+            if (qaMatch && !qaMatch[1].includes('[x]')) {
+              failures.push('No QA Evidence provided — check Loom video, Playwright trace, or screenshots');
+            }
+
+            // Greptile score not filled in
+            if (body.includes('___/5')) {
+              failures.push('Greptile score not filled in — replace `___/5` with your actual score after completing the review');
+            }
+
+            if (failures.length > 0) {
+              const message = [
+                '## ❌ PR Template Incomplete',
+                '',
+                'Fix the following before requesting review:',
+                '',
+                ...failures.map(f => `- ${f}`),
+                '',
+                'See the [PR template](https://github.com/counterpart-inc/.github/blob/main/pull_request_template.md) for guidance.',
+              ].join('\n');
+              core.setFailed(message);
+            } else {
+              core.info('✅ PR template complete.');
+            }
