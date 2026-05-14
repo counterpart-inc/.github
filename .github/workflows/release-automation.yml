@@ -1,0 +1,82 @@
+name: Release Automation (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Release version — git tag for production, SHA for QA"
+        required: true
+        type: string
+      environment:
+        description: "Deployment environment (production, qa, etc.)"
+        required: true
+        type: string
+      release_url:
+        description: "GitHub release URL — when provided, triggers AI release notes + Slack post"
+        required: false
+        type: string
+        default: ""
+      sentry_projects:
+        description: "Space-separated Sentry project slugs — when provided, creates a Sentry release"
+        required: false
+        type: string
+        default: ""
+      slack_channel:
+        description: "Slack channel for AI release notes (only used when release_url is set)"
+        required: false
+        type: string
+        default: "#engineering-releases"
+    secrets:
+      LINEAR_API_KEY:
+        required: true
+      SENTRY_AUTH_TOKEN:
+        required: false
+      SENTRY_ORG:
+        required: false
+      CLAUDE_LINEAR_AI_RELEASE_NOTES_API_KEY:
+        required: false
+      SLACK_AI_RELEASE_NOTES_TOKEN:
+        required: false
+
+jobs:
+  release-automation:
+    name: Release automation (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Sync Linear release
+        uses: linear/linear-release-action@v0
+        continue-on-error: true
+        with:
+          command: sync
+          version: ${{ inputs.version }}
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+
+      - name: Create Sentry release
+        if: inputs.sentry_projects != ''
+        uses: getsentry/action-release@dab6548b3c03c4717878099e43782cf5be654289 # v3
+        continue-on-error: true
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+        with:
+          version: ${{ inputs.version }}
+          environment: ${{ inputs.environment }}
+          projects: ${{ inputs.sentry_projects }}
+
+      - name: Generate AI release notes
+        if: inputs.release_url != ''
+        uses: counterpart-inc/linear-ai-release-notes@main
+        continue-on-error: true
+        with:
+          release_url: ${{ inputs.release_url }}
+          linear_api_key: ${{ secrets.LINEAR_API_KEY }}
+          github_token: ${{ github.token }}
+          claude_linear_ai_release_notes_api_key: ${{ secrets.CLAUDE_LINEAR_AI_RELEASE_NOTES_API_KEY }}
+          slack_token: ${{ secrets.SLACK_AI_RELEASE_NOTES_TOKEN }}
+          slack_channel: ${{ inputs.slack_channel }}
