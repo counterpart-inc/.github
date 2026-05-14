@@ -1,0 +1,9 @@
+name: Validate PR
+
+on:
+  pull_request:
+    types: [review_requested]
+
+jobs:
+  validate:
+    uses: counterpart-inc/.github/.github/workflows/validate-pr-template.yml@main
